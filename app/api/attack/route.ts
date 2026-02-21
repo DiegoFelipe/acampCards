@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbPromise, initDb } from "../../../lib/db";
+import { dbPromise } from "../../../lib/db";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();

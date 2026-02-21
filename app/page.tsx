@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 const cards = [
   { id: 1, name: "Mentira", image: "/imgs/mentira3.jpg", life: 20 },
@@ -22,6 +22,37 @@ export default function Home() {
   const [destroyCardId, setDestroyCardId] = useState<number | null>(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [victoryMessage, setVictoryMessage] = useState<string | null>(null);
+  const [stage, setStage] = useState<number | null>(0);
+  const [selectedTeam, setSelectedTeam] = useState<number | null>(0);
+  const [selectedSin, setSelectedSin] = useState<number | null>(0);
+  const [selectedWeaponCode, setSelectedWeaponCode] = useState<number | null>(0);
+
+  // ref
+  const input1Ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    input1Ref.current?.focus();
+  }, []);
+
+  const handleKeyDown = (e) => {
+    // console.log("Valor digitado1111:", stage, e.target.value);
+    const inputLen = e.target.value.length;
+    // console.log(40, inputLen);
+    if (e.key === "Enter" && stage === 0 && inputLen == 1) {
+      setStage(1);
+      setSelectedTeam(e.target.value);
+    }
+    if (e.key === "Enter" && stage === 1 && inputLen == 1) {
+      setStage(2);
+      console.log("Valor digitado:", e.target.value);
+      setSelectedSin(e.target.value);
+    }
+    if (e.key === "Enter" && stage === 2 && inputLen == 7) {
+      setStage(3);
+      // console.log("Valor digitado:", e.target.value);
+      setSelectedWeaponCode(e.target.value);
+    }
+  };
 
   useEffect(() => {
     const music = new Audio("/sounds/music.mp3");
@@ -338,38 +369,85 @@ export default function Home() {
           </div>
         )}
 
-        <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
-          <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
-            Digite a cor
-          </h2>
-          <ul className="space-y-3 text-xl text-green-300">
-            <li>
-              <span className="text-green-500">1</span> - azul
-            </li>
-            <li>
-              <span className="text-green-500">2</span> - vermelho
-            </li>
-            <li>
-              <span className="text-green-500">3</span> - verde
-            </li>
-            <li>
-              <span className="text-green-500">4</span> - amarelo
-            </li>
-          </ul>
-          <button
-            onClick={() => attackCard(3)}
-            className="mt-6 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-600"
-          >
-            Atacar Card #3
-          </button>
-          <button
-            onClick={() => destroyCard(2, "azul", "Imoralidade")}
-            className="mt-4 px-4 py-2 bg-red-700 text-white rounded hover:bg-red-600"
-          >
-            Destroy Card #2
-          </button>
-          -
-        </div>
+        {stage === 0 && (
+          <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
+              Digite a cor da sua equipe
+            </h2>
+            <ul className="space-y-3 text-xl text-white uppercase">
+              <li className="text-blue-500">
+                <span>1</span> - azul
+              </li>
+              <li className="text-red-500">
+                <span>2</span> - vermelho
+              </li>
+              <li className="text-green-500">
+                <span>3</span> - verde
+              </li>
+              <li className="text-yellow-500">
+                <span>4</span> - amarelo
+              </li>
+            </ul>
+            <button
+              onClick={() => attackCard(3)}
+              className="mt-6 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-600"
+            >
+              Atacar Card
+            </button>
+            <button
+              onClick={() => destroyCard(2, "azul", "Imoralidade")}
+              className="mt-4 px-4 py-2 bg-red-700 text-white rounded hover:bg-red-600"
+            >
+              Destroy Card #2
+            </button>
+            <input
+              type="text"
+              ref={input1Ref}
+              placeholder="..."
+              autoFocus
+              maxLength={1}
+              onKeyDown={handleKeyDown}
+              className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
+            />
+          </div>
+        )}
+
+        {stage === 1 && (
+          <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
+              Digite o número do PECADO
+            </h2>
+
+            <input
+              type="text"
+              ref={input1Ref}
+              placeholder="..."
+              autoFocus
+              maxLength={1}
+              onKeyDown={handleKeyDown}
+              className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
+            />
+          </div>
+        )}
+
+        {stage === 2 && (
+          <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
+              Digite o código da carta
+            </h2>
+
+            <input
+              type="text"
+              ref={input1Ref}
+              placeholder="..."
+              autoFocus
+              maxLength={7}
+              min={7}
+              onKeyDown={handleKeyDown}
+              className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
+            />
+          </div>
+        )}
       </div>
     </>
   );
