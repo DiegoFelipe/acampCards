@@ -66,10 +66,24 @@ export default function Home() {
     const inputLen = e.target.value.length;
     // console.log(40, inputLen);
     if (e.key === "Enter" && stage === 0 && inputLen == 1) {
+      const val = parseInt(e.target.value);
+      if (val < 1 || val > 4 || isNaN(val)) {
+        setToastMessage("⚠️ EQUIPE INVÁLIDA (1-4)");
+        setTimeout(() => setToastMessage(null), 3000);
+        e.target.value = "";
+        return;
+      }
       setStage(1);
       setSelectedTeam(e.target.value);
     }
     if (e.key === "Enter" && stage === 1 && inputLen == 1) {
+      const val = parseInt(e.target.value);
+      if (val < 1 || val > 9 || isNaN(val)) {
+        setToastMessage("⚠️ PECADO INVÁLIDO (1-9)");
+        setTimeout(() => setToastMessage(null), 3000);
+        e.target.value = "";
+        return;
+      }
       setStage(2);
       console.log("Valor digitado:", e.target.value);
       setSelectedSin(e.target.value);
