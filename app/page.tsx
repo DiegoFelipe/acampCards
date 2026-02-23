@@ -28,6 +28,7 @@ export default function Home() {
   const [selectedWeaponCode, setSelectedWeaponCode] = useState<number | null>(0);
   const [lupaCountdown, setLupaCountdown] = useState<number | null>(null);
   const [lupaLife, setLupaLife] = useState<number | null>(null);
+  const [highlightedCard, setHighlightedCard] = useState<number | null>(null);
   const lupaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ref
@@ -47,6 +48,17 @@ export default function Home() {
     document.addEventListener("click", refocus);
     return () => document.removeEventListener("click", refocus);
   }, [lupaCountdown, destroyCardId, selectedCard]);
+
+  // Random highlight effect on cards
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!selectedCard && !destroyCardId && !lupaCountdown) {
+        const randomId = cards[Math.floor(Math.random() * cards.length)].id;
+        setHighlightedCard(randomId);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [selectedCard, destroyCardId, lupaCountdown]);
 
   const handleKeyDown = (e) => {
     // console.log("Valor digitado1111:", stage, e.target.value);
@@ -211,13 +223,15 @@ export default function Home() {
       return <div key={card.id} style={{ visibility: "hidden", width: "100%", height: "auto" }} />;
     }
 
+    const isHighlighted = highlightedCard === card.id;
+
     const animationClass = isDestroyed
       ? ""
       : isSelected
         ? hasSpun
           ? "scale-110 shadow-lg"
           : "custom-spin-3d"
-        : "transition-transform duration-300 hover:scale-105";
+        : "transition-all duration-700 ease-in-out hover:scale-105";
 
     const destroyClass = isDestroyed ? "destroy-center" : "";
 
@@ -229,6 +243,7 @@ export default function Home() {
         style={{
           width: isSelected || isDestroyed ? "320px" : "100%",
           height: isSelected || isDestroyed ? "420px" : "auto",
+          ...(isHighlighted && !isSelected && !isDestroyed ? { transform: "scale(1.05)", boxShadow: "0 0 30px #00ff99, 0 0 60px #00ff6644" } : {}),
         }}
       >
         <div className="flex items-center justify-between px-4 py-2 h-[10%] text-lg font-bold text-green-300 border-b border-green-600 uppercase tracking-wider">
