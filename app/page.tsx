@@ -29,6 +29,7 @@ export default function Home() {
   const [lupaCountdown, setLupaCountdown] = useState<number | null>(null);
   const [lupaLife, setLupaLife] = useState<number | null>(null);
   const [highlightedCard, setHighlightedCard] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const lupaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ref
@@ -122,6 +123,87 @@ export default function Home() {
   };
 
   const attackCard = async (cardId: number, teamId: number, weaponCode: string) => {
+    const res = await fetch("/api/attack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamId, cardId, weaponCode }),
+    });
+    const data = await res.json();
+    console.log(78, data);
+
+    // Handle error responses with alien toast
+    if (!res.ok) {
+      const msg = data.error === "Código de arma já usado"
+        ? "⚠️ CÓDIGO JÁ UTILIZADO"
+        : "❌ CÓDIGO INVÁLIDO";
+
+      // Play alien error sound (3 layers, lasts full toast duration)
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const t = audioCtx.currentTime;
+
+      // Layer 1: Descending sweep
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.type = "sawtooth";
+      osc1.frequency.setValueAtTime(800, t);
+      osc1.frequency.exponentialRampToValueAtTime(80, t + 2.5);
+      gain1.gain.setValueAtTime(0.12, t);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 3);
+      osc1.start(t);
+      osc1.stop(t + 3);
+
+      // Layer 2: Pulsing low drone
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      const lfo = audioCtx.createOscillator();
+      const lfoGain = audioCtx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain2.gain);
+      osc2.type = "square";
+      osc2.frequency.setValueAtTime(120, t);
+      lfo.frequency.setValueAtTime(6, t);
+      lfoGain.gain.setValueAtTime(0.08, t);
+      gain2.gain.setValueAtTime(0.1, t);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 3);
+      osc2.start(t);
+      lfo.start(t);
+      osc2.stop(t + 3);
+      lfo.stop(t + 3);
+
+      // Layer 3: High warble
+      const osc3 = audioCtx.createOscillator();
+      const gain3 = audioCtx.createGain();
+      osc3.connect(gain3);
+      gain3.connect(audioCtx.destination);
+      osc3.type = "sine";
+      osc3.frequency.setValueAtTime(1200, t);
+      osc3.frequency.setValueAtTime(1400, t + 0.3);
+      osc3.frequency.setValueAtTime(1100, t + 0.6);
+      osc3.frequency.setValueAtTime(1300, t + 0.9);
+      osc3.frequency.setValueAtTime(1000, t + 1.2);
+      osc3.frequency.setValueAtTime(900, t + 1.8);
+      osc3.frequency.exponentialRampToValueAtTime(200, t + 2.8);
+      gain3.gain.setValueAtTime(0.06, t);
+      gain3.gain.exponentialRampToValueAtTime(0.001, t + 3);
+      osc3.start(t);
+      osc3.stop(t + 3);
+
+      setTimeout(() => audioCtx.state !== "closed" && audioCtx.close(), 3100);
+
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(null), 3000);
+      setStage(0);
+      setSelectedTeam(0);
+      setSelectedSin(0);
+      setSelectedWeaponCode(0);
+      return;
+    }
+
+    // Play attack animation only on success
     const attackSound = new Audio("/sounds/attack.mp3");
     await attackSound.play();
     setAttackedCards((prev) => new Set(prev).add(cardId));
@@ -132,14 +214,6 @@ export default function Home() {
         return newSet;
       });
     }, 800);
-
-    const res = await fetch("/api/attack", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamId, cardId, weaponCode }),
-    });
-    const data = await res.json();
-    console.log(78, data);
 
     // If lupa was used, select the sin card to show its details with countdown
     if (data.lupa) {
@@ -431,6 +505,17 @@ export default function Home() {
         .congrats-overlay {
           animation: congratsFade 0.5s ease-out forwards;
         }
+        @keyframes alienGlitch {
+          0%, 100% { opacity: 1; transform: skewX(0deg); }
+          10% { opacity: 0.8; transform: skewX(-2deg); }
+          20% { opacity: 1; transform: skewX(1deg); }
+          30% { opacity: 0.9; transform: skewX(0deg); }
+          50% { opacity: 0.7; transform: skewX(3deg); }
+          70% { opacity: 1; transform: skewX(-1deg); }
+        }
+        .alien-toast {
+          animation: alienGlitch 0.5s ease-out;
+        }
       `}</style>
 
       <div className="relative h-screen w-screen flex bg-black font-mono text-green-400 overflow-hidden">
@@ -484,6 +569,21 @@ export default function Home() {
           <div className="fixed inset-0 flex items-center justify-center z-50">
             <div className="bg-black text-green-100 px-12 py-6 rounded-xl text-3xl font-bold shadow-lg congrats-overlay">
               🎉 {victoryMessage} 🎉
+            </div>
+          </div>
+        )}
+
+        {toastMessage && (
+          <div className="fixed inset-0 flex items-center justify-center z-[70]">
+            <div className="relative bg-black border-2 border-green-500 rounded-xl px-16 py-10 shadow-[0_0_40px_#00ff66,0_0_80px_#00ff6633] alien-toast">
+              <div className="absolute inset-0 rounded-xl opacity-10 pointer-events-none" style={{ background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,100,0.1) 2px, rgba(0,255,100,0.1) 4px)" }} />
+              <div className="text-center">
+                <div className="text-7xl mb-4">👽</div>
+                <div className="text-green-400 text-4xl font-black font-mono uppercase tracking-wider" style={{ textShadow: "0 0 10px #00ff66, 0 0 20px #00ff66" }}>
+                  {toastMessage}
+                </div>
+                <div className="mt-3 text-green-600 text-lg font-mono opacity-70">tente outro código</div>
+              </div>
             </div>
           </div>
         )}
