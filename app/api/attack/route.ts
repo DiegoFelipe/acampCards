@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     let destroyedByFire = false;
     if (newLife === 0) {
       destroyedByFire = true;
-      await db.run("UPDATE Teams SET points = points + 50 WHERE id = ?", [teamId]);
+      await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
       await resetCard(db, cardId, card);
     }
 
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
 
       if (newLife === 0) {
         destroyed = true;
-        await db.run("UPDATE Teams SET points = points + 50 WHERE id = ?", [teamId]);
+        await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
         await resetCard(db, cardId, card);
       } else if (newLife > 0) {
         destroyed = false;
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
 
         // adiciona os pontos da equipe atual
         destroyed = true;
-        await db.run("UPDATE Teams SET points = points + 50 WHERE id = ?", [teamId]);
+        await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
       } else {
         // se a carta nao foi destruida pela equipe atual
 
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
         // se a carta foi destruida pelo veneno de outra equipe diferente do jogador atual
         if (newLife === 0) {
           destroyed = true;
-          await db.run("UPDATE Teams SET points = points + 50 WHERE id = ?", [card.poisonedBy]);
+          await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, card.poisonedBy]);
           await resetCard(db, cardId, card);
           teamId = card.poisonedBy;
         } else if (newLife > 0) {
@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
   } else if (!card.isPoison) {
     if (newLife === 0) {
       destroyed = true;
-      await db.run("UPDATE Teams SET points = points + 50 WHERE id = ?", [teamId]);
+      await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
       await resetCard(db, cardId, card);
     } else if (newLife > 0) {
       destroyed = false;
