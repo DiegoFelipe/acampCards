@@ -18,7 +18,7 @@ const cards = [
 export default function Home() {
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [hasSpun, setHasSpun] = useState(false);
-  const [attackedCards, setAttackedCards] = useState<Set<number>>(new Set());
+  const [attackedCards, setAttackedCards] = useState<Map<number, number>>(new Map());
   const [destroyCardId, setDestroyCardId] = useState<number | null>(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [victoryMessage, setVictoryMessage] = useState<string | null>(null);
@@ -122,6 +122,215 @@ export default function Home() {
     setHasSpun(false);
   };
 
+  const playWeaponSound = (type: number) => {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const t = ctx.currentTime;
+
+    if (type === 1) {
+      // Knife: metallic whoosh + impact thud + ring
+      for (let i = 0; i < 3; i++) {
+        // Whoosh sweep
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "sawtooth";
+        o.frequency.setValueAtTime(3000 + i * 400, t + i * 0.18);
+        o.frequency.exponentialRampToValueAtTime(200, t + i * 0.18 + 0.15);
+        g.gain.setValueAtTime(0.18, t + i * 0.18);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.18 + 0.18);
+        o.start(t + i * 0.18); o.stop(t + i * 0.18 + 0.18);
+
+        // Impact thud
+        const thud = ctx.createOscillator();
+        const tg = ctx.createGain();
+        thud.connect(tg); tg.connect(ctx.destination);
+        thud.type = "sine";
+        thud.frequency.setValueAtTime(150, t + i * 0.18 + 0.08);
+        thud.frequency.exponentialRampToValueAtTime(40, t + i * 0.18 + 0.2);
+        tg.gain.setValueAtTime(0.2, t + i * 0.18 + 0.08);
+        tg.gain.exponentialRampToValueAtTime(0.001, t + i * 0.18 + 0.25);
+        thud.start(t + i * 0.18 + 0.08); thud.stop(t + i * 0.18 + 0.25);
+      }
+      // Metallic ring tail
+      const ring = ctx.createOscillator();
+      const rg = ctx.createGain();
+      ring.connect(rg); rg.connect(ctx.destination);
+      ring.type = "sine";
+      ring.frequency.setValueAtTime(4200, t + 0.5);
+      ring.frequency.exponentialRampToValueAtTime(2000, t + 1.2);
+      rg.gain.setValueAtTime(0.05, t + 0.5);
+      rg.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      ring.start(t + 0.5); ring.stop(t + 1.2);
+
+    } else if (type === 2) {
+      // Bomb: deep rumble build + massive explosion + aftershock
+      // Rumble build-up
+      const rumble = ctx.createOscillator();
+      const rg = ctx.createGain();
+      rumble.connect(rg); rg.connect(ctx.destination);
+      rumble.type = "sawtooth";
+      rumble.frequency.setValueAtTime(60, t);
+      rumble.frequency.exponentialRampToValueAtTime(120, t + 0.5);
+      rg.gain.setValueAtTime(0.05, t);
+      rg.gain.linearRampToValueAtTime(0.25, t + 0.45);
+      rg.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      rumble.start(t); rumble.stop(t + 0.55);
+
+      // Massive explosion noise
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 1.2, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.25));
+      const noise = ctx.createBufferSource();
+      const ng = ctx.createGain();
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass"; lp.frequency.setValueAtTime(4000, t + 0.5); lp.frequency.exponentialRampToValueAtTime(200, t + 1.5);
+      noise.buffer = buf; noise.connect(lp); lp.connect(ng); ng.connect(ctx.destination);
+      ng.gain.setValueAtTime(0.4, t + 0.5);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      noise.start(t + 0.5);
+
+      // Sub-bass aftershock
+      const sub = ctx.createOscillator();
+      const sg = ctx.createGain();
+      sub.connect(sg); sg.connect(ctx.destination);
+      sub.type = "sine";
+      sub.frequency.setValueAtTime(50, t + 0.5);
+      sub.frequency.exponentialRampToValueAtTime(20, t + 1.5);
+      sg.gain.setValueAtTime(0.3, t + 0.5);
+      sg.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      sub.start(t + 0.5); sub.stop(t + 1.5);
+
+    } else if (type === 3) {
+      // Ice: shimmering harmonics + cracking + deep resonance
+      // Shimmer harmonics
+      [2400, 3200, 4000, 4800, 5600].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "sine";
+        o.frequency.setValueAtTime(freq, t + i * 0.08);
+        o.frequency.exponentialRampToValueAtTime(freq * 0.4, t + i * 0.08 + 0.6);
+        g.gain.setValueAtTime(0.06, t + i * 0.08);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.7);
+        o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.7);
+      });
+      // Ice crack noise
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() > 0.92 ? (Math.random() * 2 - 1) : 0) * Math.exp(-i / (ctx.sampleRate * 0.08));
+      const crack = ctx.createBufferSource();
+      const cg = ctx.createGain();
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass"; hp.frequency.value = 3000;
+      crack.buffer = buf; crack.connect(hp); hp.connect(cg); cg.connect(ctx.destination);
+      cg.gain.setValueAtTime(0.2, t + 0.3);
+      cg.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+      crack.start(t + 0.3);
+      // Deep resonant hum
+      const hum = ctx.createOscillator();
+      const hg = ctx.createGain();
+      hum.connect(hg); hg.connect(ctx.destination);
+      hum.type = "triangle";
+      hum.frequency.setValueAtTime(180, t);
+      hum.frequency.exponentialRampToValueAtTime(60, t + 1);
+      hg.gain.setValueAtTime(0.1, t);
+      hg.gain.exponentialRampToValueAtTime(0.001, t + 1);
+      hum.start(t); hum.stop(t + 1);
+
+    } else if (type === 4) {
+      // Fire: roaring sweep + crackle noise + sub rumble
+      // Roaring sweep
+      const o1 = ctx.createOscillator();
+      const o2 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      const g2 = ctx.createGain();
+      o1.connect(g1); g1.connect(ctx.destination);
+      o2.connect(g2); g2.connect(ctx.destination);
+      o1.type = "sawtooth"; o2.type = "square";
+      o1.frequency.setValueAtTime(150, t);
+      o1.frequency.exponentialRampToValueAtTime(1200, t + 0.4);
+      o1.frequency.exponentialRampToValueAtTime(80, t + 1.2);
+      o2.frequency.setValueAtTime(300, t);
+      o2.frequency.exponentialRampToValueAtTime(600, t + 0.3);
+      o2.frequency.exponentialRampToValueAtTime(100, t + 1);
+      g1.gain.setValueAtTime(0.12, t);
+      g1.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      g2.gain.setValueAtTime(0.06, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 1);
+      o1.start(t); o1.stop(t + 1.2);
+      o2.start(t); o2.stop(t + 1);
+      // Dense crackle
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 1, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() > 0.9 ? (Math.random() * 2 - 1) : 0) * 0.8 * Math.exp(-i / (ctx.sampleRate * 0.4));
+      const n = ctx.createBufferSource();
+      const ng = ctx.createGain();
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass"; bp.frequency.value = 2000; bp.Q.value = 0.5;
+      n.buffer = buf; n.connect(bp); bp.connect(ng); ng.connect(ctx.destination);
+      ng.gain.setValueAtTime(0.25, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+      n.start(t);
+      // Sub rumble
+      const sub = ctx.createOscillator();
+      const sg = ctx.createGain();
+      sub.connect(sg); sg.connect(ctx.destination);
+      sub.type = "sine";
+      sub.frequency.setValueAtTime(50, t);
+      sub.frequency.exponentialRampToValueAtTime(30, t + 1);
+      sg.gain.setValueAtTime(0.15, t + 0.1);
+      sg.gain.exponentialRampToValueAtTime(0.001, t + 1);
+      sub.start(t); sub.stop(t + 1);
+
+    } else if (type === 5) {
+      // Poison: gurgling bubbles + acid hiss + eerie drone
+      // Gurgly bubbles
+      for (let i = 0; i < 8; i++) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "sine";
+        const st = t + i * 0.12 + Math.random() * 0.06;
+        const freq = 200 + Math.random() * 400;
+        o.frequency.setValueAtTime(freq, st);
+        o.frequency.exponentialRampToValueAtTime(freq * 0.2, st + 0.2);
+        g.gain.setValueAtTime(0.1, st);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.22);
+        o.start(st); o.stop(st + 0.22);
+      }
+      // Acid hiss noise
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 0.8, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3 * Math.exp(-i / (ctx.sampleRate * 0.3));
+      const hiss = ctx.createBufferSource();
+      const hg = ctx.createGain();
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass"; hp.frequency.value = 5000;
+      hiss.buffer = buf; hiss.connect(hp); hp.connect(hg); hg.connect(ctx.destination);
+      hg.gain.setValueAtTime(0.12, t + 0.2);
+      hg.gain.exponentialRampToValueAtTime(0.001, t + 1);
+      hiss.start(t + 0.2);
+      // Eerie modulated drone
+      const drone = ctx.createOscillator();
+      const dg = ctx.createGain();
+      const lfo = ctx.createOscillator();
+      const lg = ctx.createGain();
+      drone.connect(dg); dg.connect(ctx.destination);
+      lfo.connect(lg); lg.connect(drone.frequency);
+      drone.type = "triangle";
+      drone.frequency.setValueAtTime(120, t);
+      drone.frequency.exponentialRampToValueAtTime(60, t + 1.2);
+      lfo.frequency.setValueAtTime(8, t);
+      lg.gain.setValueAtTime(30, t);
+      dg.gain.setValueAtTime(0.08, t);
+      dg.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      drone.start(t); lfo.start(t);
+      drone.stop(t + 1.2); lfo.stop(t + 1.2);
+    }
+
+    setTimeout(() => ctx.state !== "closed" && ctx.close(), 2000);
+  };
+
   const attackCard = async (cardId: number, teamId: number, weaponCode: string) => {
     const res = await fetch("/api/attack", {
       method: "POST",
@@ -204,16 +413,19 @@ export default function Home() {
     }
 
     // Play attack animation only on success
-    const attackSound = new Audio("/sounds/attack.mp3");
-    await attackSound.play();
-    setAttackedCards((prev) => new Set(prev).add(cardId));
+    const weaponType = parseInt(weaponCode[0]);
+
+    // Play weapon-specific sound
+    playWeaponSound(weaponType);
+
+    setAttackedCards((prev) => new Map(prev).set(cardId, weaponType));
     setTimeout(() => {
       setAttackedCards((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(cardId);
-        return newSet;
+        const newMap = new Map(prev);
+        newMap.delete(cardId);
+        return newMap;
       });
-    }, 800);
+    }, 1200);
 
     // If lupa was used, select the sin card to show its details with countdown
     if (data.lupa) {
@@ -290,6 +502,7 @@ export default function Home() {
 
   const renderCard = (card: (typeof cards)[0], isSelected = false, isStandaloneDestroy = false) => {
     const isAttacked = attackedCards.has(card.id);
+    const weaponUsed = attackedCards.get(card.id);
     const isDestroyed = destroyCardId === card.id;
 
     // If this card is being destroyed but this is the grid render, hide it
@@ -368,9 +581,41 @@ export default function Home() {
           </div>
         </div>
 
-        {isAttacked && (
+        {isAttacked && weaponUsed === 1 && (
           <div className="absolute inset-0 z-50 pointer-events-none overflow-hidden">
-            <div className="absolute w-32 h-32 bg-[url('/imgs/claw.png')] bg-contain bg-no-repeat animate-clawAttack left-0 top-1/2 -translate-y-1/2" />
+            <div className="absolute text-6xl animate-weaponSlash" style={{ top: '20%', left: '-20%' }}>🗡️</div>
+            <div className="absolute text-6xl animate-weaponSlash" style={{ top: '50%', left: '-20%', animationDelay: '0.15s' }}>🗡️</div>
+            <div className="absolute text-6xl animate-weaponSlash" style={{ top: '35%', left: '-20%', animationDelay: '0.3s' }}>🗡️</div>
+          </div>
+        )}
+        {isAttacked && weaponUsed === 2 && (
+          <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
+            <div className="text-8xl animate-weaponBomb">💣</div>
+            <div className="absolute text-9xl animate-weaponExplode" style={{ animationDelay: '0.4s', opacity: 0 }}>💥</div>
+          </div>
+        )}
+        {isAttacked && weaponUsed === 3 && (
+          <div className="absolute inset-0 z-50 pointer-events-none">
+            <div className="absolute inset-0 bg-cyan-400/30 animate-weaponFreeze rounded-lg" />
+            <div className="absolute text-5xl animate-weaponIceDrop" style={{ top: '-10%', left: '20%' }}>❄️</div>
+            <div className="absolute text-5xl animate-weaponIceDrop" style={{ top: '-10%', left: '50%', animationDelay: '0.2s' }}>❄️</div>
+            <div className="absolute text-5xl animate-weaponIceDrop" style={{ top: '-10%', left: '70%', animationDelay: '0.4s' }}>🧊</div>
+          </div>
+        )}
+        {isAttacked && weaponUsed === 4 && (
+          <div className="absolute inset-0 z-50 pointer-events-none">
+            <div className="absolute inset-0 bg-orange-500/20 animate-weaponFireGlow rounded-lg" />
+            <div className="absolute text-5xl animate-weaponFireRise" style={{ bottom: '-20%', left: '15%' }}>🔥</div>
+            <div className="absolute text-5xl animate-weaponFireRise" style={{ bottom: '-20%', left: '45%', animationDelay: '0.15s' }}>🔥</div>
+            <div className="absolute text-5xl animate-weaponFireRise" style={{ bottom: '-20%', left: '70%', animationDelay: '0.3s' }}>🔥</div>
+          </div>
+        )}
+        {isAttacked && weaponUsed === 5 && (
+          <div className="absolute inset-0 z-50 pointer-events-none">
+            <div className="absolute inset-0 bg-purple-600/20 animate-weaponPoisonGlow rounded-lg" />
+            <div className="absolute text-4xl animate-weaponBubble" style={{ bottom: '10%', left: '20%' }}>☠️</div>
+            <div className="absolute text-3xl animate-weaponBubble" style={{ bottom: '20%', left: '50%', animationDelay: '0.2s' }}>💀</div>
+            <div className="absolute text-4xl animate-weaponBubble" style={{ bottom: '5%', left: '70%', animationDelay: '0.4s' }}>☠️</div>
           </div>
         )}
       </div>
@@ -431,24 +676,79 @@ export default function Home() {
           animation: fadeIn 0.5s ease-out forwards;
         }
 
-        @keyframes clawAttack {
-          0% {
-            left: -100px;
-            opacity: 0;
-            transform: rotate(-20deg) scale(1.2);
-          }
-          50% {
-            opacity: 1;
-          }
-          100% {
-            left: 100%;
-            opacity: 0;
-            transform: rotate(20deg) scale(1.2);
-          }
+        /* Weapon: Knife - slash across */
+        @keyframes weaponSlash {
+          0% { left: -20%; opacity: 0; transform: rotate(-30deg); }
+          30% { opacity: 1; }
+          100% { left: 110%; opacity: 0; transform: rotate(15deg); }
         }
-        .animate-clawAttack {
-          animation: clawAttack 1.1s ease-out forwards;
+        .animate-weaponSlash { animation: weaponSlash 0.5s ease-out forwards; }
+
+        /* Weapon: Bomb - shake then explode */
+        @keyframes weaponBomb {
+          0% { transform: scale(1); opacity: 1; }
+          60% { transform: scale(1.1) rotate(10deg); opacity: 1; }
+          80% { transform: scale(1.2) rotate(-5deg); opacity: 1; }
+          100% { transform: scale(0); opacity: 0; }
         }
+        .animate-weaponBomb { animation: weaponBomb 0.5s ease-in forwards; }
+
+        @keyframes weaponExplode {
+          0% { transform: scale(0); opacity: 0; }
+          30% { transform: scale(1.5); opacity: 1; }
+          100% { transform: scale(3); opacity: 0; }
+        }
+        .animate-weaponExplode { animation: weaponExplode 0.7s ease-out forwards; }
+
+        /* Weapon: Ice - freeze overlay + snowflakes */
+        @keyframes weaponFreeze {
+          0% { opacity: 0; }
+          30% { opacity: 0.4; }
+          80% { opacity: 0.4; }
+          100% { opacity: 0; }
+        }
+        .animate-weaponFreeze { animation: weaponFreeze 1.2s ease-in-out forwards; }
+
+        @keyframes weaponIceDrop {
+          0% { top: -10%; opacity: 0; transform: rotate(0deg); }
+          20% { opacity: 1; }
+          100% { top: 100%; opacity: 0; transform: rotate(180deg); }
+        }
+        .animate-weaponIceDrop { animation: weaponIceDrop 1s ease-in forwards; }
+
+        /* Weapon: Fire - flames rise */
+        @keyframes weaponFireRise {
+          0% { bottom: -20%; opacity: 0; transform: scale(1); }
+          30% { opacity: 1; }
+          70% { opacity: 1; transform: scale(1.3); }
+          100% { bottom: 100%; opacity: 0; transform: scale(0.5); }
+        }
+        .animate-weaponFireRise { animation: weaponFireRise 0.9s ease-out forwards; }
+
+        @keyframes weaponFireGlow {
+          0% { opacity: 0; }
+          30% { opacity: 0.3; }
+          70% { opacity: 0.4; }
+          100% { opacity: 0; }
+        }
+        .animate-weaponFireGlow { animation: weaponFireGlow 1s ease-in-out forwards; }
+
+        /* Weapon: Poison - bubbles float up */
+        @keyframes weaponBubble {
+          0% { transform: translateY(0) scale(0.5); opacity: 0; }
+          20% { opacity: 1; transform: translateY(-10px) scale(1); }
+          60% { opacity: 0.8; }
+          100% { transform: translateY(-120px) scale(0.3); opacity: 0; }
+        }
+        .animate-weaponBubble { animation: weaponBubble 1s ease-out forwards; }
+
+        @keyframes weaponPoisonGlow {
+          0% { opacity: 0; }
+          30% { opacity: 0.3; }
+          80% { opacity: 0.2; }
+          100% { opacity: 0; }
+        }
+        .animate-weaponPoisonGlow { animation: weaponPoisonGlow 1.2s ease-in-out forwards; }
 
         @keyframes shake {
           0% {
