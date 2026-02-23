@@ -22,14 +22,25 @@ export default function Home() {
   const [destroyCardId, setDestroyCardId] = useState<number | null>(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [victoryMessage, setVictoryMessage] = useState<string | null>(null);
+
+  // Rewards & Questions State
+  const [pendingQuestions, setPendingQuestions] = useState<any[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [pendingRewards, setPendingRewards] = useState<{ weapons: number, magnifying: number, teamId: number } | null>(null);
+  const [questionFeedback, setQuestionFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [correctAnswerIndex, setCorrectAnswerIndex] = useState<number | null>(null);
+  const [questionTimer, setQuestionTimer] = useState<number>(30);
   const [stage, setStage] = useState<number | null>(0);
   const [selectedTeam, setSelectedTeam] = useState<number | null>(0);
   const [selectedSin, setSelectedSin] = useState<number | null>(0);
   const [selectedWeaponCode, setSelectedWeaponCode] = useState<number | null>(0);
   const [lupaCountdown, setLupaCountdown] = useState<number | null>(null);
   const [lupaLife, setLupaLife] = useState<number | null>(null);
+  const [lupaIsFreeze, setLupaIsFreeze] = useState<boolean>(false);
+  const [lupaIsPoison, setLupaIsPoison] = useState<boolean>(false);
   const [highlightedCard, setHighlightedCard] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [scrambledMessage, setScrambledMessage] = useState<string | null>(null);
   const lupaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ref
@@ -60,6 +71,23 @@ export default function Home() {
     }, 2000);
     return () => clearInterval(interval);
   }, [selectedCard, destroyCardId, lupaCountdown]);
+
+  // Question Timer
+  useEffect(() => {
+    if (stage === 4 && pendingQuestions.length > 0 && !questionFeedback) {
+      const timer = setInterval(() => {
+        setQuestionTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleAnswer(0); // 0 means time out / wrong answer
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [stage, pendingQuestions, questionFeedback, currentQuestionIndex]);
 
   const handleKeyDown = (e) => {
     // console.log("Valor digitado1111:", stage, e.target.value);
@@ -92,6 +120,20 @@ export default function Home() {
       setStage(3);
       // console.log("Valor digitado:", e.target.value);
       setSelectedWeaponCode(e.target.value);
+    }
+
+    // Question Stage (stage 4) Keyboard Input
+    if (stage === 4 && !questionFeedback) {
+      const key = e.key;
+      // if it's a number 1-5, answer
+      if (["1", "2", "3", "4", "5"].includes(key)) {
+        handleAnswer(parseInt(key));
+        e.target.value = "";
+      } else if (key !== "Enter") {
+        setToastMessage("⚠️ RESPOSTA INVÁLIDA (1-5)");
+        setTimeout(() => setToastMessage(null), 3000);
+        e.target.value = "";
+      }
     }
   };
 
@@ -446,6 +488,8 @@ export default function Home() {
       selectCard(cardId);
       setLupaCountdown(15);
       setLupaLife(data.currentLife);
+      setLupaIsFreeze(!!data.isFreeze);
+      setLupaIsPoison(!!data.isPoison);
 
       // Create audio context for countdown beeps
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -478,6 +522,8 @@ export default function Home() {
             audioCtx.state !== "closed" && audioCtx.close();
             resetCard();
             setLupaLife(null);
+            setLupaIsFreeze(false);
+            setLupaIsPoison(false);
             return null;
           }
           playBeep(prev - 1);
@@ -493,6 +539,30 @@ export default function Home() {
       const teamName = teamNames[data.teamId] || `Equipe ${data.teamId}`;
       const sinName = card?.name || "desconhecido";
       destroyCard(cardId, teamName, sinName);
+
+      if (data.drops) {
+        setTimeout(() => {
+          if (data.drops.questions && data.drops.questions.length > 0) {
+            setPendingQuestions(data.drops.questions);
+            setCurrentQuestionIndex(0);
+            setQuestionTimer(30);
+            setPendingRewards({ weapons: data.drops.weapons, magnifying: data.drops.magnifying, teamId: data.teamId });
+            setStage(4); // Question Mode
+          } else if (data.drops.weapons > 0 || data.drops.magnifying > 0) {
+            handleRewardsToast(data.drops.weapons, data.drops.magnifying);
+            setStage(0);
+          } else {
+            setStage(0);
+          }
+        }, 4000);
+      } else {
+        setTimeout(() => setStage(0), 4000);
+      }
+
+      setSelectedTeam(0);
+      setSelectedSin(0);
+      setSelectedWeaponCode(0);
+      return;
     }
 
     // Reset stages for next attack
@@ -500,6 +570,151 @@ export default function Home() {
     setSelectedTeam(0);
     setSelectedSin(0);
     setSelectedWeaponCode(0);
+  };
+
+  const handleAnswer = async (answerIndex: number) => {
+    if (questionFeedback) return; // prevent double clicking
+
+    const question = pendingQuestions[currentQuestionIndex];
+    if (!question || !pendingRewards) return;
+
+    try {
+      const res = await fetch("/api/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: question.id, answer: answerIndex, teamId: pendingRewards.teamId }),
+      });
+      const data = await res.json();
+
+      setQuestionFeedback(data.correct ? "correct" : "wrong");
+      setCorrectAnswerIndex(data.correctAnswer);
+
+      // Play sound effect based on correctness
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const t = audioCtx.currentTime;
+
+      if (data.correct) {
+        // Correct sound: pleasant ascending major chord arpeggio
+        [440, 554.37, 659.25, 880].forEach((freq, i) => { // A4, C#5, E5, A5
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, t + i * 0.08);
+          gain.gain.setValueAtTime(0.1, t + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.3);
+          osc.start(t + i * 0.08);
+          osc.stop(t + i * 0.08 + 0.3);
+        });
+      } else {
+        // Wrong sound: harsh low buzz / descending portamento
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = "sawtooth";
+        // Start low and drop lower
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.4);
+        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.start(t);
+        osc.stop(t + 0.4);
+      }
+
+      setTimeout(() => audioCtx.state !== "closed" && audioCtx.close(), 1000);
+
+      // Wait 3 seconds then go to next question or exit
+      setTimeout(() => {
+        setQuestionFeedback(null);
+        setCorrectAnswerIndex(null);
+
+        if (currentQuestionIndex + 1 < pendingQuestions.length) {
+          setCurrentQuestionIndex(prev => prev + 1);
+          setQuestionTimer(30);
+        } else {
+          // Finish questions
+          setPendingQuestions([]);
+          setCurrentQuestionIndex(0);
+
+          if (pendingRewards.weapons > 0 || pendingRewards.magnifying > 0) {
+            handleRewardsToast(pendingRewards.weapons, pendingRewards.magnifying);
+          }
+          setPendingRewards(null);
+          setStage(0);
+        }
+      }, 3000);
+    } catch (e) {
+      console.error("Error submitting answer:", e);
+    }
+  };
+
+  const handleRewardsToast = (weapons: number, magnifying: number) => {
+    // 1. Format message dynamically
+    const parts = [];
+    if (weapons > 0) parts.push(`${weapons}x Armas`);
+    if (magnifying > 0) parts.push(`${magnifying}x Lupa`);
+    if (parts.length === 0) return;
+
+    const finalMessage = `🎁 RECOMPENSAS:\n${parts.join(" e ")}`;
+
+    // 2. Start Matrix Jackpot Scramble
+    setToastMessage("..."); // trigger toast UI
+    const chars = "01%$#@!&*?";
+    let ticks = 0;
+
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const tStart = audioCtx.currentTime;
+
+    // Fast ticking sound for scramble duration (2 seconds)
+    for (let i = 0; i < 20; i++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = "square";
+      osc.frequency.setValueAtTime(600 + Math.random() * 400, tStart + i * 0.1);
+      gain.gain.setValueAtTime(0.05, tStart + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, tStart + i * 0.1 + 0.05);
+      osc.start(tStart + i * 0.1);
+      osc.stop(tStart + i * 0.1 + 0.05);
+    }
+
+    const scrambleInterval = setInterval(() => {
+      let scrambled = "🎁 RECOMPENSAS:\n";
+      for (let i = 0; i < finalMessage.length - 16; i++) { // offset "🎁 RECOMPENSAS:\n"
+        scrambled += chars[Math.floor(Math.random() * chars.length)];
+      }
+      setScrambledMessage(scrambled);
+      ticks++;
+
+      if (ticks >= 20) { // 2 seconds completed
+        clearInterval(scrambleInterval);
+        setScrambledMessage(null);
+        setToastMessage(finalMessage);
+
+        // 3. Play positive reward sound (sparkly arpeggio)
+        const tFinish = audioCtx.currentTime;
+        [400, 500, 600, 800].forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, tFinish + i * 0.1);
+          gain.gain.setValueAtTime(0.15, tFinish + i * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, tFinish + i * 0.1 + 0.4);
+          osc.start(tFinish + i * 0.1);
+          osc.stop(tFinish + i * 0.1 + 0.4);
+        });
+
+        setTimeout(() => {
+          setToastMessage(null);
+          audioCtx.state !== "closed" && audioCtx.close();
+        }, 5000); // 5 seconds timeout
+      }
+    }, 100);
   };
 
   const destroyCard = (id: number, teamName: string, sin: string) => {
@@ -850,7 +1065,7 @@ export default function Home() {
         {destroyCardId && renderCard(cards.find((c) => c.id === destroyCardId)!, false, true)}
 
         {selectedCard && hasSpun && (
-          <div className="fixed top-1/2 left-1/2 -translate-y-1/2 translate-x-[220px] z-50 w-64 h-48 bg-green-900 text-green-200 border border-green-500 shadow-xl rounded-md p-4 animate-fadeIn">
+          <div className="fixed top-1/2 left-1/2 -translate-y-1/2 translate-x-[220px] z-50 w-64 bg-green-900 text-green-200 border border-green-500 shadow-xl rounded-md p-4 animate-fadeIn">
             <h3 className="text-lg font-bold mb-2">Informações</h3>
             <p>
               <strong>Nome:</strong> {cards.find((c) => c.id === selectedCard)?.name}
@@ -858,7 +1073,20 @@ export default function Home() {
             <p>
               <strong>Vida Atual: </strong>{lupaLife !== null ? lupaLife : cards.find((c) => c.id === selectedCard)?.life}❤️
             </p>
-            <p className="text-sm text-green-400 mt-2">Mais detalhes podem ir aqui...</p>
+            {(lupaIsFreeze || lupaIsPoison) && (
+              <div className="mt-3 flex flex-col gap-1">
+                {lupaIsFreeze && (
+                  <div className="flex items-center gap-2 text-cyan-300 bg-cyan-900/40 px-2 py-1 rounded">
+                    <span>❄️</span> <span className="font-bold text-sm">CONGELADO</span>
+                  </div>
+                )}
+                {lupaIsPoison && (
+                  <div className="flex items-center gap-2 text-purple-400 bg-purple-900/40 px-2 py-1 rounded">
+                    <span>☠️</span> <span className="font-bold text-sm">ENVENENADO</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -889,14 +1117,24 @@ export default function Home() {
 
         {toastMessage && (
           <div className="fixed inset-0 flex items-center justify-center z-[70]">
-            <div className="relative bg-black border-2 border-green-500 rounded-xl px-16 py-10 shadow-[0_0_40px_#00ff66,0_0_80px_#00ff6633] alien-toast">
+            <div className={`relative bg-black border-2 ${scrambledMessage ? 'border-green-300 shadow-[0_0_80px_#00ff66]' : 'border-green-500 shadow-[0_0_40px_#00ff66,0_0_80px_#00ff6633]'} rounded-xl px-16 py-10 alien-toast transition-all duration-300`}>
               <div className="absolute inset-0 rounded-xl opacity-10 pointer-events-none" style={{ background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,100,0.1) 2px, rgba(0,255,100,0.1) 4px)" }} />
               <div className="text-center">
-                <div className="text-7xl mb-4">👽</div>
-                <div className="text-green-400 text-4xl font-black font-mono uppercase tracking-wider" style={{ textShadow: "0 0 10px #00ff66, 0 0 20px #00ff66" }}>
-                  {toastMessage}
+                <div className="text-7xl mb-4 text-center mx-auto w-full flex justify-center">
+                  {scrambledMessage ? (
+                    <div className="animate-pulse">👾</div>
+                  ) : toastMessage.includes("RECOMPENSAS") ? (
+                    <div className="animate-bounce">👽</div>
+                  ) : (
+                    <div>👽</div>
+                  )}
                 </div>
-                <div className="mt-3 text-green-600 text-lg font-mono opacity-70">tente outro código</div>
+                <div className={`text-green-400 text-4xl font-black font-mono uppercase tracking-wider whitespace-pre-line ${scrambledMessage ? 'opacity-80' : ''}`} style={{ textShadow: "0 0 10px #00ff66, 0 0 20px #00ff66" }}>
+                  {scrambledMessage ? scrambledMessage : toastMessage}
+                </div>
+                {!toastMessage.includes("RECOMPENSAS") && (
+                  <div className="mt-3 text-green-600 text-lg font-mono opacity-70">tente outro código</div>
+                )}
               </div>
             </div>
           </div>
@@ -969,6 +1207,65 @@ export default function Home() {
               min={7}
               onKeyDown={handleKeyDown}
               className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
+            />
+          </div>
+        )}
+
+        {stage === 4 && pendingQuestions.length > 0 && (
+          <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center z-10 overflow-y-auto">
+            <h2 className="text-green-400 text-2xl font-bold uppercase text-center mb-4 leading-tight">
+              BÔNUS ({currentQuestionIndex + 1}/{pendingQuestions.length})
+            </h2>
+
+            <div className={`text-4xl font-black tabular-nums border-2 rounded px-4 py-2 mb-4 transition-colors ${questionTimer <= 5 ? "text-red-500 border-red-500 animate-pulse bg-red-900/20" :
+              questionTimer <= 10 ? "text-yellow-500 border-yellow-500 bg-yellow-900/20" :
+                "text-green-500 border-green-500 bg-green-900/20"
+              }`}>
+              00:{String(questionTimer).padStart(2, '0')}
+            </div>
+
+            <div className="bg-green-900/30 border border-green-500 rounded p-4 mb-6 text-green-100 text-center text-sm">
+              {pendingQuestions[currentQuestionIndex].prompt}
+            </div>
+
+            <div className="w-full flex flex-col gap-3">
+              {[1, 2, 3, 4, 5].map((i) => {
+                const altText = pendingQuestions[currentQuestionIndex][`alt${i}`];
+                let btnClass = "bg-black border border-green-700 text-green-400 hover:bg-green-900/50";
+
+                if (questionFeedback) {
+                  if (i === correctAnswerIndex) {
+                    btnClass = "bg-green-600 border-green-400 text-white shadow-[0_0_15px_#00ff00]";
+                  } else {
+                    btnClass = "bg-black border-gray-700 text-gray-500 opacity-50";
+                  }
+                }
+
+                return (
+                  <button
+                    key={i}
+                    disabled={!!questionFeedback}
+                    onClick={() => handleAnswer(i)}
+                    className={`px-4 py-3 rounded uppercase text-xs font-bold font-mono transition-all text-left ${btnClass}`}
+                  >
+                    <span className="text-gray-500 mr-2">{i}.</span> {altText}
+                  </button>
+                );
+              })}
+            </div>
+            {questionFeedback === "correct" && (
+              <div className="mt-6 text-green-400 text-xl font-bold animate-pulse">+20 PONTOS!</div>
+            )}
+            {questionFeedback === "wrong" && (
+              <div className="mt-6 text-red-500 text-xl font-bold animate-pulse">❌</div>
+            )}
+
+            <input
+              type="text"
+              ref={input1Ref}
+              autoFocus
+              className="opacity-0 absolute w-0 h-0"
+              onKeyDown={handleKeyDown}
             />
           </div>
         )}

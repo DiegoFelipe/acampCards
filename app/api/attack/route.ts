@@ -124,9 +124,11 @@ export async function POST(req: NextRequest) {
     await db.run("UPDATE Cards SET currentLife = ? WHERE id = ?", [newLife, cardId]);
 
     let destroyedByFire = false;
+    let drops = null;
     if (newLife === 0) {
       destroyedByFire = true;
       await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
+      drops = await calculateDrops(db, card, teamId);
       await resetCard(db, cardId, card);
     }
 
@@ -135,6 +137,7 @@ export async function POST(req: NextRequest) {
       teamId,
       fogo: true,
       destroyed: destroyedByFire,
+      drops,
     });
   }
 
@@ -165,6 +168,7 @@ export async function POST(req: NextRequest) {
   let newLife = card.currentLife - damage;
   if (newLife < 0) newLife = 0;
   let destroyed = false;
+  let drops = null;
 
   // ****
   // * se a carta esta envenenada, aplica o dano da equipe que envenou depois
@@ -187,6 +191,7 @@ export async function POST(req: NextRequest) {
       if (newLife === 0) {
         destroyed = true;
         await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
+        drops = await calculateDrops(db, card, teamId);
         await resetCard(db, cardId, card);
       } else if (newLife > 0) {
         destroyed = false;
@@ -198,6 +203,7 @@ export async function POST(req: NextRequest) {
 
       // se a carta foi derrotada pela equipe atual, zera o veneno e congelado
       if (newLife === 0) {
+        drops = await calculateDrops(db, card, teamId);
         await resetCard(db, cardId, card);
 
         // adiciona os pontos da equipe atual
@@ -225,8 +231,9 @@ export async function POST(req: NextRequest) {
         if (newLife === 0) {
           destroyed = true;
           await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, card.poisonedBy]);
-          await resetCard(db, cardId, card);
+          drops = await calculateDrops(db, card, card.poisonedBy);
           teamId = card.poisonedBy;
+          await resetCard(db, cardId, card);
         } else if (newLife > 0) {
           // se a carta nao foi destruida pelo veneno de outra equipe
           await db.run("UPDATE Cards SET currentLife = ? WHERE id = ?", [newLife, cardId]);
@@ -237,6 +244,7 @@ export async function POST(req: NextRequest) {
     if (newLife === 0) {
       destroyed = true;
       await db.run("UPDATE Teams SET points = points + ? WHERE id = ?", [card.maxLife, teamId]);
+      drops = await calculateDrops(db, card, teamId);
       await resetCard(db, cardId, card);
     } else if (newLife > 0) {
       destroyed = false;
@@ -251,6 +259,7 @@ export async function POST(req: NextRequest) {
     destroyed,
     teamId,
     last: true,
+    drops,
   });
 }
 
@@ -262,6 +271,71 @@ async function resetCard(db, cardId, card) {
   await db.run("UPDATE Cards SET isFreeze = false WHERE id = ?", [cardId]);
   await db.run("UPDATE Cards SET frozenBy = 0 WHERE id = ?", [cardId]);
   return;
+}
+
+async function calculateDrops(db: any, card: any, teamId: number) {
+  const totalDrops = Math.floor(card.maxLife / 50);
+  const dropTypes = [card.drop1, card.drop2, card.drop3];
+
+  let questionCount = 0;
+  let weaponCount = 0;
+  let magnifyingCount = 0;
+
+  for (let i = 0; i < totalDrops; i++) {
+    const dropType = dropTypes[Math.floor(Math.random() * 3)];
+    if (dropType === 1) questionCount++;
+    else if (dropType === 2) weaponCount++;
+    else if (dropType === 3) magnifyingCount++;
+  }
+
+  // Fetch random questions
+  let questions: any[] = [];
+  if (questionCount > 0) {
+    questions = await db.all(
+      "SELECT * FROM Questions ORDER BY RANDOM() LIMIT ?",
+      [questionCount]
+    );
+  }
+
+  // Save weapon rewards
+  if (weaponCount > 0) {
+    const existing = await db.get(
+      "SELECT * FROM Rewards WHERE teamId = ? AND dropType = 2",
+      [teamId]
+    );
+    if (existing) {
+      await db.run(
+        "UPDATE Rewards SET amount = amount + ? WHERE teamId = ? AND dropType = 2",
+        [weaponCount, teamId]
+      );
+    } else {
+      await db.run(
+        "INSERT INTO Rewards (teamId, dropType, amount) VALUES (?, 2, ?)",
+        [teamId, weaponCount]
+      );
+    }
+  }
+
+  // Save magnifying rewards
+  if (magnifyingCount > 0) {
+    const existing = await db.get(
+      "SELECT * FROM Rewards WHERE teamId = ? AND dropType = 3",
+      [teamId]
+    );
+    if (existing) {
+      await db.run(
+        "UPDATE Rewards SET amount = amount + ? WHERE teamId = ? AND dropType = 3",
+        [magnifyingCount, teamId]
+      );
+    } else {
+      await db.run(
+        "INSERT INTO Rewards (teamId, dropType, amount) VALUES (?, 3, ?)",
+        [teamId, magnifyingCount]
+      );
+    }
+  }
+
+  return { questions, weapons: weaponCount, magnifying: magnifyingCount };
 }
 
 /**
