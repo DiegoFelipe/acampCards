@@ -163,6 +163,15 @@ export default function Home() {
       }, 1000);
     }
 
+    // If the card was destroyed, trigger the destroy animation
+    if (data.destroyed) {
+      const teamNames: { [key: number]: string } = { 1: "Azul", 2: "Vermelho", 3: "Verde", 4: "Amarelo" };
+      const card = cards.find((c) => c.id === cardId);
+      const teamName = teamNames[data.teamId] || `Equipe ${data.teamId}`;
+      const sinName = card?.name || "desconhecido";
+      destroyCard(cardId, teamName, sinName);
+    }
+
     // Reset stages for next attack
     setStage(0);
     setSelectedTeam(0);
@@ -182,15 +191,22 @@ export default function Home() {
     }, 2000); // duração da animação de destruição
   };
 
-  const renderCard = (card: (typeof cards)[0], isSelected = false) => {
+  const renderCard = (card: (typeof cards)[0], isSelected = false, isStandaloneDestroy = false) => {
     const isAttacked = attackedCards.has(card.id);
     const isDestroyed = destroyCardId === card.id;
 
-    const animationClass = isSelected
-      ? hasSpun
-        ? "scale-110 shadow-lg"
-        : "custom-spin-3d"
-      : "transition-transform duration-300 hover:scale-105";
+    // If this card is being destroyed but this is the grid render, hide it
+    if (isDestroyed && !isStandaloneDestroy) {
+      return <div key={card.id} style={{ visibility: "hidden", width: "100%", height: "auto" }} />;
+    }
+
+    const animationClass = isDestroyed
+      ? ""
+      : isSelected
+        ? hasSpun
+          ? "scale-110 shadow-lg"
+          : "custom-spin-3d"
+        : "transition-transform duration-300 hover:scale-105";
 
     const destroyClass = isDestroyed ? "destroy-center" : "";
 
@@ -407,7 +423,7 @@ export default function Home() {
 
         {selectedCard && renderCard(cards.find((c) => c.id === selectedCard)!, true)}
 
-        {destroyCardId && renderCard(cards.find((c) => c.id === destroyCardId)!, false)}
+        {destroyCardId && renderCard(cards.find((c) => c.id === destroyCardId)!, false, true)}
 
         {selectedCard && hasSpun && (
           <div className="fixed top-1/2 left-1/2 -translate-y-1/2 translate-x-[220px] z-50 w-64 h-48 bg-green-900 text-green-200 border border-green-500 shadow-xl rounded-md p-4 animate-fadeIn">
