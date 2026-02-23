@@ -4,15 +4,15 @@ import Image from "next/image";
 import { useEffect, useState, useRef } from "react";
 
 const cards = [
-  { id: 1, name: "Mentira", image: "/imgs/mentira3.jpg", life: 20 },
-  { id: 2, name: "Imoralidade", image: "/imgs/imoralidade3.jpg", life: 30 },
-  { id: 3, name: "Inveja", image: "/imgs/inveja3.jpg", life: 15 },
-  { id: 4, name: "Gula", image: "/imgs/gula2.jpg", life: 5 },
-  { id: 5, name: "Ira", image: "/imgs/ira2.jpg", life: 25 },
-  { id: 6, name: "Idolatria", image: "/imgs/idolatria2.jpg", life: 50 },
-  { id: 7, name: "Fofoca", image: "/imgs/fofoca2.jpg", life: 45 },
-  { id: 8, name: "Preguiça", image: "/imgs/preguica.jpg", life: 45 },
-  { id: 9, name: "Divisão na igreja", image: "/imgs/divisao2.jpg", life: 30 },
+  { id: 1, name: "Mentira", image: "/imgs/mentira3.jpg", life: 200 },
+  { id: 2, name: "Imoralidade", image: "/imgs/imoralidade3.jpg", life: 300 },
+  { id: 3, name: "Inveja", image: "/imgs/inveja3.jpg", life: 150 },
+  { id: 4, name: "Gula", image: "/imgs/gula2.jpg", life: 50 },
+  { id: 5, name: "Ira", image: "/imgs/ira2.jpg", life: 250 },
+  { id: 6, name: "Idolatria", image: "/imgs/idolatria2.jpg", life: 500 },
+  { id: 7, name: "Fofoca", image: "/imgs/fofoca2.jpg", life: 450 },
+  { id: 8, name: "Preguiça", image: "/imgs/preguica.jpg", life: 450 },
+  { id: 9, name: "Divisão na igreja", image: "/imgs/divisao2.jpg", life: 300 },
 ];
 
 export default function Home() {
@@ -26,6 +26,8 @@ export default function Home() {
   const [selectedTeam, setSelectedTeam] = useState<number | null>(0);
   const [selectedSin, setSelectedSin] = useState<number | null>(0);
   const [selectedWeaponCode, setSelectedWeaponCode] = useState<number | null>(0);
+  const [lupaCountdown, setLupaCountdown] = useState<number | null>(null);
+  const lupaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ref
   const input1Ref = useRef<HTMLInputElement>(null);
@@ -76,6 +78,13 @@ export default function Home() {
     };
   }, []);
 
+  // Trigger attack when all inputs are collected (stage 3)
+  useEffect(() => {
+    if (stage === 3 && selectedTeam && selectedSin && selectedWeaponCode) {
+      attackCard(Number(selectedSin), Number(selectedTeam), String(selectedWeaponCode));
+    }
+  }, [stage]);
+
   const selectCard = (id: number) => {
     setSelectedCard(id);
     setHasSpun(false);
@@ -88,14 +97,14 @@ export default function Home() {
     setHasSpun(false);
   };
 
-  const attackCard = async (id: number) => {
+  const attackCard = async (cardId: number, teamId: number, weaponCode: string) => {
     const attackSound = new Audio("/sounds/attack.mp3");
     await attackSound.play();
-    setAttackedCards((prev) => new Set(prev).add(id));
+    setAttackedCards((prev) => new Set(prev).add(cardId));
     setTimeout(() => {
       setAttackedCards((prev) => {
         const newSet = new Set(prev);
-        newSet.delete(id);
+        newSet.delete(cardId);
         return newSet;
       });
     }, 800);
@@ -103,10 +112,59 @@ export default function Home() {
     const res = await fetch("/api/attack", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamId: 2, cardId: 1, weaponCode: "2594760" }),
+      body: JSON.stringify({ teamId, cardId, weaponCode }),
     });
     const data = await res.json();
     console.log(78, data);
+
+    // If lupa was used, select the sin card to show its details with countdown
+    if (data.lupa) {
+      selectCard(cardId);
+      setLupaCountdown(15);
+
+      // Create audio context for countdown beeps
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+      const playBeep = (secondsLeft: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        // Higher pitch in last 5 seconds for urgency
+        osc.frequency.value = secondsLeft <= 5 ? 1200 + (5 - secondsLeft) * 100 : 800;
+        osc.type = "square";
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.15);
+      };
+
+      // Play initial beep
+      playBeep(15);
+
+      // Clear any existing interval
+      if (lupaIntervalRef.current) clearInterval(lupaIntervalRef.current);
+
+      lupaIntervalRef.current = setInterval(() => {
+        setLupaCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(lupaIntervalRef.current!);
+            lupaIntervalRef.current = null;
+            audioCtx.state !== "closed" && audioCtx.close();
+            resetCard();
+            return null;
+          }
+          playBeep(prev - 1);
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    // Reset stages for next attack
+    setStage(0);
+    setSelectedTeam(0);
+    setSelectedSin(0);
+    setSelectedWeaponCode(0);
   };
 
   const destroyCard = (id: number, teamName: string, sin: string) => {
@@ -137,9 +195,8 @@ export default function Home() {
       <div
         key={card.id}
         onClick={() => !isSelected && !isDestroyed && selectCard(card.id)}
-        className={`relative ${isAttacked ? "animate-shake" : ""} ${
-          isSelected || isDestroyed ? "selected-card" : ""
-        } ${animationClass} ${destroyClass} bg-black border border-green-700 shadow-[0_0_20px_#00ff99] rounded-lg flex flex-col overflow-hidden cursor-pointer`}
+        className={`relative ${isAttacked ? "animate-shake" : ""} ${isSelected || isDestroyed ? "selected-card" : ""
+          } ${animationClass} ${destroyClass} bg-black border border-green-700 shadow-[0_0_20px_#00ff99] rounded-lg flex flex-col overflow-hidden cursor-pointer`}
         style={{
           width: isSelected || isDestroyed ? "320px" : "100%",
           height: isSelected || isDestroyed ? "420px" : "auto",
@@ -160,6 +217,7 @@ export default function Home() {
             width={300}
             height={300}
             className="h-full w-full object-cover filter grayscale-[30%] contrast-125 hover:grayscale-0 transition duration-300"
+            priority={card.id === 2}
           />
         </div>
         <div className="flex flex-1 divide-x divide-green-700 border-t border-green-600 text-green-300 text-sm h-10">
@@ -361,6 +419,23 @@ export default function Home() {
           </div>
         )}
 
+        {lupaCountdown !== null && (
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center">
+            <div className="relative">
+              <div className="text-8xl font-black tabular-nums text-green-400 drop-shadow-[0_0_30px_rgba(0,255,100,0.8)] animate-pulse" style={{ fontFamily: "'Courier New', monospace", textShadow: "0 0 10px #00ff66, 0 0 20px #00ff66, 0 0 40px #00ff66, 0 0 80px #003300" }}>
+                {String(lupaCountdown).padStart(2, '0')}
+              </div>
+              <div className="absolute inset-0 text-8xl font-black tabular-nums text-transparent" style={{ fontFamily: "'Courier New', monospace", WebkitTextStroke: '1px rgba(0,255,100,0.3)' }}>
+                {String(lupaCountdown).padStart(2, '0')}
+              </div>
+            </div>
+            <div className="mt-2 text-green-500 text-sm uppercase tracking-[0.5em] font-mono opacity-70">🔍 investigando</div>
+            <div className="mt-3 w-48 h-1 bg-green-900 rounded-full overflow-hidden">
+              <div className="h-full bg-green-400 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_10px_#00ff66]" style={{ width: `${(lupaCountdown / 15) * 100}%` }} />
+            </div>
+          </div>
+        )}
+
         {showCongrats && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
             <div className="bg-black text-green-100 px-12 py-6 rounded-xl text-3xl font-bold shadow-lg congrats-overlay">
@@ -389,7 +464,7 @@ export default function Home() {
               </li>
             </ul>
             <button
-              onClick={() => attackCard(3)}
+              onClick={() => attackCard(3, 1, "1987650")}
               className="mt-6 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-600"
             >
               Atacar Card
