@@ -27,6 +27,7 @@ export default function Home() {
   const [selectedSin, setSelectedSin] = useState<number | null>(0);
   const [selectedWeaponCode, setSelectedWeaponCode] = useState<number | null>(0);
   const [lupaCountdown, setLupaCountdown] = useState<number | null>(null);
+  const [lupaLife, setLupaLife] = useState<number | null>(null);
   const lupaIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ref
@@ -121,6 +122,7 @@ export default function Home() {
     if (data.lupa) {
       selectCard(cardId);
       setLupaCountdown(15);
+      setLupaLife(data.currentLife);
 
       // Create audio context for countdown beeps
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -152,6 +154,7 @@ export default function Home() {
             lupaIntervalRef.current = null;
             audioCtx.state !== "closed" && audioCtx.close();
             resetCard();
+            setLupaLife(null);
             return null;
           }
           playBeep(prev - 1);
@@ -413,7 +416,7 @@ export default function Home() {
               <strong>Nome:</strong> {cards.find((c) => c.id === selectedCard)?.name}
             </p>
             <p>
-              <strong>Vida:</strong> {cards.find((c) => c.id === selectedCard)?.life}
+              <strong>Vida Atual: </strong>{lupaLife !== null ? lupaLife : cards.find((c) => c.id === selectedCard)?.life}❤️
             </p>
             <p className="text-sm text-green-400 mt-2">Mais detalhes podem ir aqui...</p>
           </div>
