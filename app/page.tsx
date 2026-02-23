@@ -35,7 +35,18 @@ export default function Home() {
 
   useEffect(() => {
     input1Ref.current?.focus();
-  }, []);
+  }, [stage]);
+
+  // Keep input focused — refocus on any click unless an animation is active
+  useEffect(() => {
+    const refocus = () => {
+      if (!lupaCountdown && !destroyCardId && !selectedCard) {
+        setTimeout(() => input1Ref.current?.focus(), 50);
+      }
+    };
+    document.addEventListener("click", refocus);
+    return () => document.removeEventListener("click", refocus);
+  }, [lupaCountdown, destroyCardId, selectedCard]);
 
   const handleKeyDown = (e) => {
     // console.log("Valor digitado1111:", stage, e.target.value);
@@ -213,9 +224,8 @@ export default function Home() {
     return (
       <div
         key={card.id}
-        onClick={() => !isSelected && !isDestroyed && selectCard(card.id)}
         className={`relative ${isAttacked ? "animate-shake" : ""} ${isSelected || isDestroyed ? "selected-card" : ""
-          } ${animationClass} ${destroyClass} bg-black border border-green-700 shadow-[0_0_20px_#00ff99] rounded-lg flex flex-col overflow-hidden cursor-pointer`}
+          } ${animationClass} ${destroyClass} bg-black border border-green-700 shadow-[0_0_20px_#00ff99] rounded-lg flex flex-col overflow-hidden`}
         style={{
           width: isSelected || isDestroyed ? "320px" : "100%",
           height: isSelected || isDestroyed ? "420px" : "auto",
@@ -465,6 +475,7 @@ export default function Home() {
 
         {stage === 0 && (
           <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <Image src="/imgs/logo.gif" alt="Logo" width={150} height={150} className="mb-4" />
             <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
               Digite a cor da sua equipe
             </h2>
@@ -482,18 +493,6 @@ export default function Home() {
                 <span>4</span> - amarelo
               </li>
             </ul>
-            <button
-              onClick={() => attackCard(3, 1, "1987650")}
-              className="mt-6 px-4 py-2 bg-green-700 text-white rounded hover:bg-green-600"
-            >
-              Atacar Card
-            </button>
-            <button
-              onClick={() => destroyCard(2, "azul", "Imoralidade")}
-              className="mt-4 px-4 py-2 bg-red-700 text-white rounded hover:bg-red-600"
-            >
-              Destroy Card #2
-            </button>
             <input
               type="text"
               ref={input1Ref}
@@ -508,6 +507,7 @@ export default function Home() {
 
         {stage === 1 && (
           <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <Image src="/imgs/logo.gif" alt="Logo" width={150} height={150} className="mb-4" />
             <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
               Digite o número do PECADO
             </h2>
@@ -526,6 +526,7 @@ export default function Home() {
 
         {stage === 2 && (
           <div className="w-[20%] h-full bg-black border-l border-green-800 p-6 flex flex-col items-center justify-center space-y-6 z-10">
+            <Image src="/imgs/logo.gif" alt="Logo" width={150} height={150} className="mb-4" />
             <h2 className="text-green-400 text-3xl font-bold uppercase text-center animate-pulse">
               Digite o código da carta
             </h2>
