@@ -89,12 +89,12 @@ export default function Home() {
     }
   }, [stage, pendingQuestions, questionFeedback, currentQuestionIndex]);
 
-  const handleKeyDown = (e) => {
-    // console.log("Valor digitado1111:", stage, e.target.value);
-    const inputLen = e.target.value.length;
-    // console.log(40, inputLen);
-    if (e.key === "Enter" && stage === 0 && inputLen == 1) {
-      const val = parseInt(e.target.value);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valStr = e.target.value;
+    const inputLen = valStr.length;
+
+    if (stage === 0 && inputLen === 1) {
+      const val = parseInt(valStr);
       if (val < 1 || val > 4 || isNaN(val)) {
         setToastMessage("⚠️ EQUIPE INVÁLIDA (1-4)");
         setTimeout(() => setToastMessage(null), 3000);
@@ -102,10 +102,10 @@ export default function Home() {
         return;
       }
       setStage(1);
-      setSelectedTeam(e.target.value);
-    }
-    if (e.key === "Enter" && stage === 1 && inputLen == 1) {
-      const val = parseInt(e.target.value);
+      setSelectedTeam(val);
+      e.target.value = "";
+    } else if (stage === 1 && inputLen === 1) {
+      const val = parseInt(valStr);
       if (val < 1 || val > 9 || isNaN(val)) {
         setToastMessage("⚠️ PECADO INVÁLIDO (1-9)");
         setTimeout(() => setToastMessage(null), 3000);
@@ -113,13 +113,27 @@ export default function Home() {
         return;
       }
       setStage(2);
-      console.log("Valor digitado:", e.target.value);
-      setSelectedSin(e.target.value);
-    }
-    if (e.key === "Enter" && stage === 2 && inputLen == 7) {
+      setSelectedSin(val);
+      e.target.value = "";
+    } else if (stage === 2 && inputLen === 7) {
       setStage(3);
-      // console.log("Valor digitado:", e.target.value);
-      setSelectedWeaponCode(e.target.value);
+      setSelectedWeaponCode(parseInt(valStr));
+      e.target.value = "";
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Fallback for Enter if they type too fast or paste differently
+    const target = e.target as HTMLInputElement;
+    const inputLen = target.value.length;
+    if (e.key === "Enter" && stage === 0 && inputLen === 1) {
+      handleChange(e as any);
+    }
+    if (e.key === "Enter" && stage === 1 && inputLen === 1) {
+      handleChange(e as any);
+    }
+    if (e.key === "Enter" && stage === 2 && inputLen === 7) {
+      handleChange(e as any);
     }
 
     // Question Stage (stage 4) Keyboard Input
@@ -128,11 +142,11 @@ export default function Home() {
       // if it's a number 1-5, answer
       if (["1", "2", "3", "4", "5"].includes(key)) {
         handleAnswer(parseInt(key));
-        e.target.value = "";
+        target.value = "";
       } else if (key !== "Enter") {
         setToastMessage("⚠️ RESPOSTA INVÁLIDA (1-5)");
         setTimeout(() => setToastMessage(null), 3000);
-        e.target.value = "";
+        target.value = "";
       }
     }
   };
@@ -1166,6 +1180,7 @@ export default function Home() {
               placeholder="..."
               autoFocus
               maxLength={1}
+              onChange={handleChange}
               onKeyDown={handleKeyDown}
               className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
             />
@@ -1185,6 +1200,7 @@ export default function Home() {
               placeholder="..."
               autoFocus
               maxLength={1}
+              onChange={handleChange}
               onKeyDown={handleKeyDown}
               className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
             />
@@ -1205,6 +1221,7 @@ export default function Home() {
               autoFocus
               maxLength={7}
               min={7}
+              onChange={handleChange}
               onKeyDown={handleKeyDown}
               className="bg-black text-green-400 font-mono text-lg border border-green-500 px-4 py-2 rounded outline-none focus:shadow-[0_0_20px_#00ff00] caret-green-400 placeholder-green-400 transition"
             />
@@ -1265,6 +1282,7 @@ export default function Home() {
               ref={input1Ref}
               autoFocus
               className="opacity-0 absolute w-0 h-0"
+              onChange={handleChange}
               onKeyDown={handleKeyDown}
             />
           </div>
